@@ -1,4 +1,4 @@
-# Clarity Certification Smart Contract
+# Clarity Certification Service Smart Contract
 
 This is a Clarity smart contract that manages the certification issuance, verification, and revocation process, including associated fee handling and skill validation. The contract allows an admin to manage various parameters, such as certification fee and expiration period, and allows holders to issue, update, and verify certifications for specific skills.
 
