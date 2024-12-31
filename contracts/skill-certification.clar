@@ -77,3 +77,65 @@
         (asserts! (is-eq tx-sender contract-owner) err-admin-only)
         (asserts! (> new-fee u0) err-invalid-credential)
         (ok (var-set verification-fee new-fee))))
+
+;; Set certification expiration (admin only)
+(define-public (set-certification-expiration (days uint))
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-admin-only)
+        (asserts! (> days u0) err-invalid-credential)
+        (ok (var-set certification-expiration days))))
+
+;; Issue a new certification
+(define-public (issue-certification (holder principal) (skill (string-ascii 50)))
+    (begin
+        (asserts! (validate-skill skill) err-invalid-skill)
+        (let (
+            (certification-id (new-cert-id))
+            (issue-date block-height)
+            (expires (calculate-expiration block-height))
+        )
+            (asserts! (is-none (map-get? holder-certifications holder)) err-already-certified)
+            (map-set certificates 
+                {id: certification-id}
+                {
+                    holder: holder,
+                    skill: skill,
+                    issued-on: issue-date,
+                    expires-on: expires,
+                    is-active: true
+                }
+            )
+            (map-set holder-certifications 
+                holder 
+                {certification-id: certification-id}
+            )
+            (ok certification-id))))
+
+;; Revoke a certification
+(define-public (revoke-certification (certification-id uint))
+    (begin
+        (asserts! (validate-cert-id certification-id) err-invalid-id)
+        (let ((certification-data (unwrap! (map-get? certificates {id: certification-id}) err-certification-not-found)))
+            (asserts! (is-eq tx-sender contract-owner) err-admin-only)
+            (map-set certificates 
+                {id: certification-id}
+                (merge certification-data {is-active: false})
+            )
+            (var-set revoked-certifications (+ (var-get revoked-certifications) u1))
+            (ok true))))
+
+;; Verify certification (fee required)
+(define-public (verify-certification (certification-id uint))
+    (begin
+        (asserts! (validate-cert-id certification-id) err-invalid-id)
+        (let ((certification-data (unwrap! (map-get? certificates {id: certification-id}) err-certification-not-found)))
+            (asserts! (get is-active certification-data) err-certification-revoked)
+            (try! (stx-transfer? (var-get verification-fee) tx-sender contract-owner))
+            (ok certification-data))))
+
+;; Reset certifications count (admin only)
+(define-public (reset-certifications-count (new-count uint))
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-admin-only)
+        (asserts! (>= new-count u0) err-invalid-credential)
+        (ok (var-set cert-count new-count))))
