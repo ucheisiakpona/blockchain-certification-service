@@ -205,3 +205,79 @@
         (match (map-get? certificates {id: certification-id})
             certification-data (ok (get is-active certification-data))
             err-certification-not-found)))
+
+;; Function to update the certification fee with validation
+;; Allows the admin to update the fee for certification verification
+(define-public (update-certification-fee (new-fee uint))
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-admin-only) ;; Only admin can update the fee
+        (asserts! (> new-fee u0) err-invalid-credential) ;; Fee must be greater than 0
+        (ok (var-set verification-fee new-fee)))) ;; Update the fee in the contract
+
+;; Function to add a new skill to the system
+;; Allows the admin to add a new skill type to the contract
+(define-public (add-new-skill (new-skill (string-ascii 50)))
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-admin-only) ;; Only admin can add new skills
+        (ok "Skill added successfully")))
+
+;; Function to check the validity of a certification
+;; Returns whether the certification is still valid based on the expiration date
+(define-public (check-certification-validity (certification-id uint))
+    (begin
+        (asserts! (validate-cert-id certification-id) err-invalid-id)
+        (let ((certification-data (unwrap! (map-get? certificates {id: certification-id}) err-certification-not-found)))
+            (if (>= (get expires-on certification-data) block-height)
+                (ok "Certification is valid")
+                (ok "Certification has expired")))))
+
+;; Function to update the expiration period for certifications
+;; Allows the admin to modify the expiration period for certifications
+(define-public (update-cert-expiration (new-expiration uint))
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-admin-only) ;; Only admin can update expiration period
+        (asserts! (> new-expiration u0) err-invalid-credential) ;; Expiration period must be greater than 0
+        (ok (var-set certification-expiration new-expiration)))) ;; Update the expiration period
+
+;; Function to prevent multiple certification issuance for the same skill
+;; Ensures that a holder cannot be issued the same certification for the same skill more than once
+(define-public (prevent-duplicate-certification (holder principal) (skill (string-ascii 50)))
+    (begin
+        (asserts! (is-none (map-get? holder-certifications holder)) err-already-certified)
+        (ok "No duplicate certifications found")))
+
+;; Read-Only Functions
+
+;; Check certification status
+(define-read-only (check-certification (certification-id uint))
+    (begin
+        (asserts! (validate-cert-id certification-id) err-invalid-id)
+        (match (map-get? certificates {id: certification-id})
+            certification-data (ok {
+                holder: (get holder certification-data),
+                skill: (get skill certification-data),
+                is-active: (get is-active certification-data)
+            })
+            err-certification-not-found)))
+
+;; Get holder certification ID
+(define-read-only (get-holder-cert-id (holder principal))
+    (match (map-get? holder-certifications holder)
+        cert-data (ok (get certification-id cert-data))
+        (err err-certification-not-found)))
+
+;; Get verification fee
+(define-read-only (get-verification-fee)
+    (ok (var-get verification-fee)))
+
+;; Get certification expiration
+(define-read-only (get-certification-expiration)
+    (ok (var-get certification-expiration)))
+
+;; Get total certificates issued
+(define-read-only (get-total-certifications)
+    (ok (var-get cert-count)))
+
+;; Get revoked certifications count
+(define-read-only (get-revoked-certifications)
+    (ok (var-get revoked-certifications)))
